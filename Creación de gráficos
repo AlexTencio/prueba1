@@ -1,3 +1,5 @@
+#Codigo utilizado para la creación de gráficos en Google Colab
+
 # Importar bibliotecas necesarias
 import pandas as pd
 import numpy as np
