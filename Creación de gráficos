@@ -1,0 +1,212 @@
+# Importar bibliotecas necesarias
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from scipy.stats import zscore
+
+# Dar permiso para acceder al drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+#  Cargar los datos desde tu archivo CSV
+# Especifica la ruta completa del archivo en Google Drive
+file_path = '/content/drive/My Drive/Ciudades_Final.csv'  # Cambia a la ruta correcta
+
+# Cargar el archivo CSV
+df = pd.read_csv(file_path)
+
+# Mostrar las primeras filas del DataFrame para verificar
+df.head()
+# Seleccionar las columnas relevantes
+columns_to_keep = ['Cntry_name', 'eFUA_name', 'POP_SUM', 'GDP_SUM', 'BS_SUM',
+                   'CO2_SUM', 'BV_SUM', 'BV_BS', 'POV_MEAN', 'CO2_POP']
+# Renombrar columnas para mayor claridad
+df_cleaned = df[columns_to_keep].copy()
+df_cleaned.columns = ['País', 'Ciudad', 'Población', 'PIB', 'Superficie_construida', 'Emisiones_de_carbono',
+                      'Volumen_construido', 'Relación_Volumen/Superficie', 'Pobreza', 'Emisiones_de_carbono_per_capita']
+# Limpiar los datos
+df_cleaned = df_cleaned.replace(['#DIV/0!', '<Null>'], np.nan)
+
+# Convertir las columnas relevantes a numéricas
+df_cleaned['Población'] = pd.to_numeric(df_cleaned['Población'], errors='coerce')
+df_cleaned['PIB'] = pd.to_numeric(df_cleaned['PIB'], errors='coerce')
+df_cleaned['Superficie_construida'] = pd.to_numeric(df_cleaned['Superficie_construida'], errors='coerce')
+df_cleaned['Emisiones_de_carbono'] = pd.to_numeric(df_cleaned['Emisiones_de_carbono'], errors='coerce')
+df_cleaned['Volumen_construido'] = pd.to_numeric(df_cleaned['Volumen_construido'], errors='coerce')
+df_cleaned['Relación_Volumen/Superficie'] = pd.to_numeric(df_cleaned['Relación_Volumen/Superficie'], errors='coerce')
+df_cleaned['Pobreza'] = pd.to_numeric(df_cleaned['Pobreza'], errors='coerce')
+df_cleaned['Emisiones_de_carbono_per_capita'] = pd.to_numeric(df_cleaned['Emisiones_de_carbono_per_capita'], errors='coerce')
+
+# Eliminar filas donde todas las columnas relevantes sean NaN
+df_cleaned.dropna(how='all', subset=['Población', 'PIB', 'Superficie_construida', 'Emisiones_de_carbono',
+                                     'Volumen_construido', 'Relación_Volumen/Superficie', 'Pobreza',
+                                     'Emisiones_de_carbono_per_capita'], inplace=True)
+
+# Rellenar los valores nulos con la media de cada columna
+df_cleaned.fillna(df_cleaned.mean(numeric_only=True), inplace=True)
+
+# Agrupar por ciudad y sumar los valores numéricos, manteniendo los nombres únicos de ciudades
+df_grouped = df_cleaned.groupby(['País', 'Ciudad'], as_index=False).agg({
+    'Población': 'sum',
+    'PIB': 'sum',
+    'Superficie_construida': 'sum',
+    'Emisiones_de_carbono': 'sum',
+    'Volumen_construido': 'sum',
+    'Relación_Volumen/Superficie': 'mean',  # La razón puede tener más sentido con la media
+    'Pobreza': 'mean',  # La pobreza suele expresarse mejor con la media
+    'Emisiones_de_carbono_per_capita': 'mean'
+})
+
+# Generación de gráficos
+
+# Visualización de la correlación con Plotly
+# Crear un heatmap de la matriz de correlación
+fig = go.Figure(data=go.Heatmap(
+                   z=correlation_matrix.values,
+                   x=correlation_matrix.columns,
+                   y=correlation_matrix.columns,
+                   colorscale='Blues'))
+fig.update_layout(title='Matriz de Correlación de las variables para Centroamerica', xaxis_nticks=36)
+fig.show()
+
+# Guardar archivo como html
+fig.write_html("grafico_interactivo.html")
+from google.colab import files
+files.download("grafico_interactivo.html")
+
+#Gráficos de relación (se crean con cada variable)
+import plotly.express as px
+
+# Calcular la media de las variables en los ejes X y Y
+mean_x = df_grouped['PIB'].mean()
+mean_y = df_grouped['Población'].mean()
+
+# Crear un gráfico de dispersión con la línea de la media en X y Y
+fig = px.scatter(
+    df_grouped,  
+    x="PIB",  
+    y="Población",  
+    size="Población",  
+    color="País",  
+    color_discrete_map={
+        "Belize": '#0f22c6',
+        "CostaRica": '#f51313',
+        "ElSalvador": '#277be7',
+        "Guatemala": '#38bcea',
+        "Honduras": '#7addff',
+        "Nicaragua": '#3f8da7',
+        "Panama": '#b51919',
+    },  
+    hover_name="Ciudad",  
+    log_x=True, 
+    size_max=60  
+)
+
+# Añadir líneas de la media en X y Y
+fig.add_shape(
+    type="line",
+    x0=mean_x, x1=mean_x, y0=df_grouped['Población'].min(), y1=df_grouped['Población'].max(),
+    line=dict(color="red", width=2, dash="dash"),
+    name="Media de Población"
+)
+
+fig.add_shape(
+    type="line",
+    x0=df_grouped['PIB'].min(), x1=df_grouped['PIB'].max(),
+    y0=mean_y, y1=mean_y,
+    line=dict(color="blue", width=2, dash="dash"),
+    name="Media del PIB"
+)
+
+# Actualizar el diseño para que las líneas de referencia se muestren correctamente
+fig.update_layout(
+    title='Relación entre PIB y Población incluyendo líneas de Media para Centroamérica',
+    shapes=[dict(type='line', x0=mean_x, x1=mean_x, y0=df_grouped['Población'].min(), y1=df_grouped['Población'].max(),
+                 line=dict(color="red", dash="dash")),
+            dict(type='line', x0=df_grouped['PIB'].min(),
+                 x1=df_grouped['PIB'].max(), y0=mean_y, y1=mean_y,
+                 line=dict(color="blue", dash="dash"))]
+)
+
+# Mostrar la figura
+fig.show()
+
+# Guardar archivo como html
+fig.write_html("grafico_interactivo.html")
+from google.colab import files
+files.download("grafico_interactivo.html")
+
+# Gráfico de ranking
+fig = px.bar(
+    top_5_cities,  
+    x="Ciudad",  
+    y="General_Rank",  
+    title="Top 5 Ciudades por Ranking General relación Emisiones de carbono, PIB y Volúmen/Superficie construída en Centroamerica",
+    labels={'General_Rank': 'Ranking General'}, 
+    hover_data=['País', 'Rank_Emisiones', 'Rank_PIB', 'Rank_Relación_V/S'],  
+    color="País",  
+    color_discrete_map={  
+        "Belize": '#0f22c6',
+        "CostaRica": '#f51313',
+        "ElSalvador": '#277be7',
+        "Guatemala": '#38bcea',
+        "Honduras": '#7addff',
+        "Nicaragua": '#3f8da7',
+        "Panama": '#b51919',
+    },
+    height=400
+)
+
+# Mostrar la figura
+fig.show()
+
+# Guardar archivo como html
+fig.write_html("grafico_interactivo.html")
+from google.colab import files
+files.download("grafico_interactivo.html")
+
+import plotly.express as px
+
+# Crear un histograma de emisiones de carbono per cápita
+fig = px.histogram(
+    df_grouped,
+    x="Emisiones_de_carbono_per_capita",
+    title="Histograma de Emisiones de Carbono per Cápita para Centroamerica",
+    nbins=30,  
+    color="País",  
+    hover_data=['Ciudad'], 
+    color_discrete_map={  
+         "Belize": '#0f22c6',
+        "CostaRica": '#f51313',
+        "ElSalvador": '#277be7',
+        "Guatemala": '#38bcea',
+        "Honduras": '#7addff',
+        "Nicaragua": '#3f8da7',
+        "Panama": '#b51919',
+    }
+)
+
+# Mostrar la figura
+fig.show()
+
+# Guardar archivo como html
+fig.write_html("grafico_interactivo.html")
+from google.colab import files
+files.download("grafico_interactivo.html")
+
+# Pastel de sumatoria
+emissions_by_country = df_grouped.groupby('País')['Emisiones_de_carbono_per_capita'].sum().reset_index()
+
+# Crear un gráfico de pastel
+fig = px.pie(
+    emissions_by_country,
+    names="País",
+    values="Emisiones_de_carbono_per_capita",
+    title="Distribución de Emisiones de Carbono per Cápita por País en Centroamerica"
+)
+
+fig.show()
+fig.write_html("grafico_interactivo.html")
+from google.colab import files
+files.download("grafico_interactivo.html")
